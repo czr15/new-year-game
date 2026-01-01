@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>给你的新年礼物</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 保持原有的所有CSS样式不变 */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Arial Rounded MT Bold', 'Microsoft YaHei', sans-serif; }
+        body { overflow: hidden; background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); }
+        /* ... 其他所有CSS样式保持不变 ... */
+    </style>
+</head>
+<body>
+    <!-- 音乐提示层 -->
+    <div id="music-hint" style="display:none;">
+        <div class="hint-box">
+            <i class="fas fa-music"></i>
+            <h2>🎵 开启音乐体验</h2>
+            <p>点击下方按钮开启背景音乐</p>
+            <button class="hint-btn" id="enable-music-btn">
+                开启音乐并进入
+            </button>
+        </div>
+    </div>
+
+    <!-- 第一幕：礼物选择 -->
+    <div id="scene-1">
+        <div class="gift-container">
+            <div class="gift-emoji">🎁</div>
+            <div class="gift-text">给<span>朱奕霏</span>的新年礼物，是否接收？</div>
+            <div class="buttons">
+                <button class="btn btn-accept" id="accept-btn">接 受 💝</button>
+                <button class="btn btn-reject" id="reject-btn">拒 绝 ✖</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第二幕：信件页面 -->
+    <div id="scene-2">
+        <canvas id="snow-canvas"></canvas>
+        <canvas id="hearts-canvas"></canvas>
+        
+        <div class="letter-container">
+            <div class="letter-header">
+                <div class="ribbon">🎀</div>
+                <div class="to-name">to 朱奕霏</div>
+                <div class="decoration-line"></div>
+            </div>
+            
+            <div class="letter-content">
+希望我们在这些年能变得更好
+            </div>
+            
+            <div class="letter-footer">
+                <div class="from-name">一一</div>
+                <div class="date">2026年1月1日</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音乐控制 -->
+    <div class="music-control" id="music-control">
+        <i class="fas fa-play"></i>
+    </div>
+
+    <!-- 背景音乐 - 多源备用 -->
+    <audio id="bg-music" loop preload="auto">
+        <source src="https://cdn.freesound.org/previews/324/324142_4948336-lq.mp3" type="audio/mpeg">
+        <source src="http://commondatastorage.googleapis.com/codeskulptor-assets/Epoq-Lepidoptera.ogg" type="audio/ogg">
+        您的浏览器不支持音频播放
+    </audio>
+
+    <script>
+        // ========== 音乐播放系统 ==========
+        const bgMusic = document.getElementById('bg-music');
+        const musicControl = document.getElementById('music-control');
+        const musicIcon = musicControl.querySelector('i');
+        const musicHint = document.getElementById('music-hint');
+        const enableMusicBtn = document.getElementById('enable-music-btn');
+        
+        let musicPlaying = false;
+        let musicInitialized = false;
+        
+        // 尝试播放音乐
+        function tryPlayMusic() {
+            if (musicInitialized) return;
+            
+            bgMusic.volume = 0.3;
+            
+            // 方法1：直接播放
+            const playPromise = bgMusic.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    // 成功！
+                    musicPlaying = true;
+                    musicInitialized = true;
+                    musicIcon.className = 'fas fa-pause';
+                    console.log('音乐自动播放成功');
+                }).catch(error => {
+                    console.log('自动播放被阻止，显示提示');
+                    showMusicHint();
+                });
+            }
+        }
+        
+        // 显示音乐提示
+        function showMusicHint() {
+            musicHint.style.display = 'flex';
+            
+            enableMusicBtn.onclick = function() {
+                bgMusic.play().then(() => {
+                    musicPlaying = true;
+                    musicInitialized = true;
+                    musicIcon.className = 'fas fa-pause';
+                    musicHint.style.display = 'none';
+                    localStorage.setItem('musicEnabled', 'true');
+                });
+            };
+            
+            // 5秒后自动隐藏提示，让用户手动点击音乐按钮
+            setTimeout(() => {
+                if (!musicPlaying) {
+                    musicHint.style.opacity = '0';
+                    setTimeout(() => {
+                        musicHint.style.display = 'none';
+                    }, 500);
+                }
+            }, 5000);
+        }
+        
+        // 页面加载后尝试播放
+        window.addEventListener('load', () => {
+            setTimeout(tryPlayMusic, 300);
+            
+            // 全局点击时也尝试
+            document.addEventListener('click', () => {
+                if (!musicInitialized) {
+                    tryPlayMusic();
+                }
+            }, { once: true });
+        });
+        
+        // 音乐控制按钮
+        musicControl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            if (!musicInitialized) {
+                bgMusic.play().then(() => {
+                    musicPlaying = true;
+                    musicInitialized = true;
+                    musicIcon.className = 'fas fa-pause';
+                });
+                return;
+            }
+            
+            if (musicPlaying) {
+                bgMusic.pause();
+                musicIcon.className = 'fas fa-play';
+            } else {
+                bgMusic.play();
+                musicIcon.className = 'fas fa-pause';
+            }
+            musicPlaying = !musicPlaying;
+        });
+        
+        // ========== 拒绝按钮逃跑效果 ==========
+        let rejectRunning = false;
+        let rejectInterval = null;
+        let speed = 5;
+        
+        function moveRejectButton() {
+            if (!rejectRunning) return;
+            
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const btnWidth = rejectBtn.offsetWidth;
+            const btnHeight = rejectBtn.offsetHeight;
+            
+            let newX = Math.random() * (viewportWidth - btnWidth);
+            let newY = Math.random() * (viewportHeight - btnHeight);
+            
+            rejectBtn.style.transition = `all ${0.3 + Math.random() * 0.4}s cubic-bezier(0.34, 1.56, 0.64, 1)`;
+            rejectBtn.style.position = 'fixed';
+            rejectBtn.style.left = newX + 'px';
+            rejectBtn.style.top = newY + 'px';
+            rejectBtn.style.transform = `rotate(${Math.random() * 20 - 10}deg)`;
+            
+            speed = Math.min(speed + 0.2, 15);
+        }
+        
+        rejectBtn.addEventListener('click', () => {
+            if (!rejectRunning) {
+                rejectRunning = true;
+                moveRejectButton();
+                rejectInterval = setInterval(moveRejectButton, 800 - speed * 30);
+                rejectBtn.innerHTML = '抓不到我 😜';
+                rejectBtn.style.background = 'linear-gradient(135deg, #ff4757, #ff3838)';
+            }
+        });
+        
+        rejectBtn.addEventListener('mouseover', () => {
+            if (!rejectRunning) {
+                moveRejectButton();
+            }
+        });
+        
+        // ========== 接受按钮点击 ==========
+        acceptBtn.addEventListener('click', () => {
+            if (rejectInterval) {
+                clearInterval(rejectInterval);
+                rejectRunning = false;
+            }
+            
+            acceptBtn.innerHTML = '接收中 💖';
+            acceptBtn.style.background = 'linear-gradient(135deg, #00d2ff, #3a7bd5)';
+            
+            setTimeout(() => {
+                scene1.style.opacity = '0';
+                scene1.style.transform = 'scale(1.1)';
+                
+                setTimeout(() => {
+                    scene1.style.display = 'none';
+                    scene2.style.display = 'flex';
+                    
+                    setTimeout(() => {
+                        scene2.style.opacity = '1';
+                        
+                        // 确保音乐播放
+                        if (!musicPlaying && musicInitialized) {
+                            bgMusic.play().then(() => {
+                                musicPlaying = true;
+                                musicIcon.className = 'fas fa-pause';
+                            });
+                        }
+                        
+                        // 启动特效
+                        initSnow();
+                        initHearts();
+                    }, 100);
+                }, 600);
+            }, 300);
+        });
+        
+        // ========== 特效系统 ==========
+        function initSnow() {
+            const canvas = document.getElementById('snow-canvas');
+            const ctx = canvas.getContext('2d');
+            let snowflakes = [];
+            
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            
+            class Snowflake {
+                constructor() {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height - canvas.height;
+                    this.size = Math.random() * 5 + 2;
+                    this.speed = Math.random() * 1.2 + 0.5;
+                    this.opacity = Math.random() * 0.6 + 0.2;
+                    this.wind = Math.random() * 0.8 - 0.4;
+                    this.swing = Math.random() * 0.05;
+                    this.swingOffset = Math.random() * Math.PI * 2;
+                }
+                
+                update() {
+                    this.y += this.speed;
+                    this.x += this.wind + Math.sin(Date.now() * 0.001 + this.swingOffset) * this.swing;
+                    
+                    if (this.y > canvas.height) {
+                        this.y = -10;
+                        this.x = Math.random() * canvas.width;
+                    }
+                    if (this.x > canvas.width) this.x = 0;
+                    if (this.x < 0) this.x = canvas.width;
+                }
+                
+                draw() {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    ctx.fill();
+                }
+            }
+            
+            function createSnowflakes() {
+                snowflakes = [];
+                for (let i = 0; i < 200; i++) {
+                    snowflakes.push(new Snowflake());
+                }
+            }
+            
+            function animateSnow() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                snowflakes.forEach(flake => {
+                    flake.update();
+                    flake.draw();
+                });
+                requestAnimationFrame(animateSnow);
+            }
+            
+            resizeCanvas();
+            createSnowflakes();
+            animateSnow();
+            
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                createSnowflakes();
+            });
+        }
+        
+        function initHearts() {
+            const canvas = document.getElementById('hearts-canvas');
+            const ctx = canvas.getContext('2d');
+            let hearts = [];
+            
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            
+            class Heart {
+                constructor() {
+                    this.x = Math.random() * canvas.width;
+                    this.y = canvas.height + 20;
+                    this.size = Math.random() * 12 + 8;
+                    this.speed = Math.random() * 1.5 + 0.5;
+                    this.opacity = Math.random() * 0.5 + 0.2;
+                    this.color = `rgba(255, ${Math.floor(Math.random() * 80 + 100)}, ${Math.floor(Math.random() * 120 + 180)}, ${this.opacity})`;
+                    this.wave = Math.random() * 0.8;
+                    this.waveSpeed = Math.random() * 0.03 + 0.01;
+                    this.waveOffset = Math.random() * Math.PI * 2;
+                    this.rotation = Math.random() * Math.PI * 2;
+                    this.rotateSpeed = Math.random() * 0.02 - 0.01;
+                }
+                
+                update() {
+                    this.y -= this.speed;
+                    this.x += Math.sin(Date.now() * this.waveSpeed + this.waveOffset) * this.wave;
+                    this.rotation += this.rotateSpeed;
+                    
+                    if (this.y < -30) {
+                        this.y = canvas.height + 20;
+                        this.x = Math.random() * canvas.width;
+                    }
+                }
+                
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = this.opacity;
+                    ctx.fillStyle = this.color;
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(this.rotation);
+                    
+                    ctx.beginPath();
+                    const topCurveHeight = this.size * 0.3;
+                    ctx.moveTo(0, topCurveHeight);
+                    
+                    ctx.bezierCurveTo(0, 0, -this.size, 0, -this.size, topCurveHeight);
+                    ctx.bezierCurveTo(-this.size, this.size * 0.6, 0, this.size * 0.9, 0, this.size);
+                    ctx.bezierCurveTo(0, this.size * 0.9, this.size, this.size * 0.6, this.size, topCurveHeight);
+                    ctx.bezierCurveTo(this.size, 0, 0, 0, 0, topCurveHeight);
+                    
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+            
+            function createHearts() {
+                hearts = [];
+                for (let i = 0; i < 40; i++) {
+                    hearts.push(new Heart());
+                }
+            }
+            
+            function animateHearts() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                hearts.forEach(heart => {
+                    heart.update();
+                    heart.draw();
+                });
+                requestAnimationFrame(animateHearts);
+            }
+            
+            resizeCanvas();
+            createHearts();
+            animateHearts();
+            
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                createHearts();
+            });
+        }
+    </script>
+</body>
+</html>
